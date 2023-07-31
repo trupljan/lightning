@@ -49,6 +49,7 @@ def _parse_gpu_ids(
     gpus: Optional[Union[int, str, List[int]]],
     include_cuda: bool = False,
     include_mps: bool = False,
+    include_dml: bool = False
 ) -> Optional[List[int]]:
     """
     Parses the GPU IDs given in the format as accepted by the
@@ -84,14 +85,14 @@ def _parse_gpu_ids(
     # We know the user requested GPUs therefore if some of the
     # requested GPUs are not available an exception is thrown.
     gpus = _normalize_parse_gpu_string_input(gpus)
-    gpus = _normalize_parse_gpu_input_to_list(gpus, include_cuda=include_cuda, include_mps=include_mps)
+    gpus = _normalize_parse_gpu_input_to_list(gpus, include_cuda=include_cuda, include_mps=include_mps, include_dml=include_dml)
     if not gpus:
         raise MisconfigurationException("GPUs requested but none are available.")
 
     if (
         TorchElasticEnvironment.detect()
         and len(gpus) != 1
-        and len(_get_all_available_gpus(include_cuda=include_cuda, include_mps=include_mps)) == 1
+        and len(_get_all_available_gpus(include_cuda=include_cuda, include_mps=include_mps, include_dml=include_dml)) == 1
     ):
         # Omit sanity check on torchelastic because by default it shows one visible GPU per process
         return gpus
@@ -99,7 +100,7 @@ def _parse_gpu_ids(
     # Check that GPUs are unique. Duplicate GPUs are not supported by the backend.
     _check_unique(gpus)
 
-    return _sanitize_gpu_ids(gpus, include_cuda=include_cuda, include_mps=include_mps)
+    return _sanitize_gpu_ids(gpus, include_cuda=include_cuda, include_mps=include_mps, include_dml=include_dml)
 
 
 def _normalize_parse_gpu_string_input(s: Union[int, str, List[int]]) -> Union[int, List[int]]:
@@ -112,7 +113,7 @@ def _normalize_parse_gpu_string_input(s: Union[int, str, List[int]]) -> Union[in
     return int(s.strip())
 
 
-def _sanitize_gpu_ids(gpus: List[int], include_cuda: bool = False, include_mps: bool = False) -> List[int]:
+def _sanitize_gpu_ids(gpus: List[int], include_cuda: bool = False, include_mps: bool = False, include_dml: bool = False) -> List[int]:
     """Checks that each of the GPUs in the list is actually available. Raises a MisconfigurationException if any of
     the GPUs is not available.
 
@@ -126,9 +127,9 @@ def _sanitize_gpu_ids(gpus: List[int], include_cuda: bool = False, include_mps: 
         MisconfigurationException:
             If machine has fewer available GPUs than requested.
     """
-    if sum((include_cuda, include_mps)) == 0:
+    if sum((include_cuda, include_mps, include_dml)) == 0:
         raise ValueError("At least one gpu type should be specified!")
-    all_available_gpus = _get_all_available_gpus(include_cuda=include_cuda, include_mps=include_mps)
+    all_available_gpus = _get_all_available_gpus(include_cuda=include_cuda, include_mps=include_mps, include_dml=include_dml)
     for gpu in gpus:
         if gpu not in all_available_gpus:
             raise MisconfigurationException(
@@ -138,7 +139,7 @@ def _sanitize_gpu_ids(gpus: List[int], include_cuda: bool = False, include_mps: 
 
 
 def _normalize_parse_gpu_input_to_list(
-    gpus: Union[int, List[int], Tuple[int, ...]], include_cuda: bool, include_mps: bool
+    gpus: Union[int, List[int], Tuple[int, ...]], include_cuda: bool, include_mps: bool, include_dml: bool = False
 ) -> Optional[List[int]]:
     assert gpus is not None
     if isinstance(gpus, (MutableSequence, tuple)):
@@ -148,19 +149,20 @@ def _normalize_parse_gpu_input_to_list(
     if not gpus:  # gpus==0
         return None
     if gpus == -1:
-        return _get_all_available_gpus(include_cuda=include_cuda, include_mps=include_mps)
+        return _get_all_available_gpus(include_cuda=include_cuda, include_mps=include_mps, include_dml=include_dml)
 
     return list(range(gpus))
 
 
-def _get_all_available_gpus(include_cuda: bool = False, include_mps: bool = False) -> List[int]:
+def _get_all_available_gpus(include_cuda: bool = False, include_mps: bool = False, include_dml: bool = False) -> List[int]:
     """
     Returns:
         A list of all available GPUs
     """
     cuda_gpus = accelerators.cuda._get_all_visible_cuda_devices() if include_cuda else []
     mps_gpus = accelerators.mps._get_all_available_mps_gpus() if include_mps else []
-    return cuda_gpus + mps_gpus
+    dml_gpus = accelerators.dml._get_all_available_dml_gpus() if include_dml else []
+    return cuda_gpus + mps_gpus + dml_gpus
 
 
 def _check_unique(device_ids: List[int]) -> None:
@@ -196,3 +198,5 @@ def _check_data_type(device_ids: object) -> None:
                 raise TypeError(f"{msg} a sequence of {type(id_).__name__}.")
     elif type(device_ids) not in (int, str):
         raise TypeError(f"{msg} {device_ids!r}.")
+
+# DMLPatch

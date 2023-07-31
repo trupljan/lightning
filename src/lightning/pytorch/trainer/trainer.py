@@ -135,7 +135,7 @@ class Trainer:
         r"""Customize every aspect of training via flags.
 
         Args:
-            accelerator: Supports passing different accelerator types ("cpu", "gpu", "tpu", "ipu", "hpu", "mps", "auto")
+            accelerator: Supports passing different accelerator types ("cpu", "gpu", "tpu", "ipu", "hpu", "mps", "dml", "auto")
                 as well as custom accelerator instances.
 
             strategy: Supports different training strategies with aliases as well custom strategies.
@@ -422,6 +422,9 @@ class Trainer:
             self, TrainerFn.VALIDATING, RunningStage.VALIDATING, inference_mode=inference_mode
         )
         self.test_loop = _EvaluationLoop(self, TrainerFn.TESTING, RunningStage.TESTING, inference_mode=inference_mode)
+        # prevent "RuntimeError: Cannot set version_counter for inference tensor"
+        if self._accelerator_connector._is_dml():
+            inference_mode = False
         self.predict_loop = _PredictionLoop(self, inference_mode=inference_mode)
 
         self.accumulate_grad_batches = accumulate_grad_batches
@@ -1679,3 +1682,5 @@ class Trainer:
 
         max_estimated_steps = min(max_estimated_steps, self.max_steps) if self.max_steps != -1 else max_estimated_steps
         return max_estimated_steps
+
+# DMLPatch

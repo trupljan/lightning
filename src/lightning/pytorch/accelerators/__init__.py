@@ -17,7 +17,10 @@ from lightning.pytorch.accelerators.cpu import CPUAccelerator  # noqa: F401
 from lightning.pytorch.accelerators.cuda import CUDAAccelerator  # noqa: F401
 from lightning.pytorch.accelerators.mps import MPSAccelerator  # noqa: F401
 from lightning.pytorch.accelerators.xla import XLAAccelerator  # noqa: F401
+from lightning.pytorch.accelerators.dml import DMLAccelerator  # noqa: F401
 
 ACCELERATORS_BASE_MODULE = "lightning.pytorch.accelerators"
 AcceleratorRegistry = _AcceleratorRegistry()
 call_register_accelerators(AcceleratorRegistry, ACCELERATORS_BASE_MODULE)
+
+# DMLPatch

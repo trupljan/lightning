@@ -23,6 +23,7 @@ from lightning.fabric.accelerators.accelerator import Accelerator
 from lightning.fabric.accelerators.cuda import CUDAAccelerator
 from lightning.fabric.accelerators.mps import MPSAccelerator
 from lightning.fabric.accelerators.xla import XLAAccelerator
+from lightning.fabric.accelerators.dml import DMLAccelerator
 from lightning.fabric.plugins import (
     CheckpointIO,
     DeepSpeedPrecision,
@@ -321,6 +322,8 @@ class _Connector:
             return "mps"
         if CUDAAccelerator.is_available():
             return "cuda"
+        if DMLAccelerator.is_available():
+            return "dml"
         raise RuntimeError("No supported gpu backend found!")
 
     def _set_parallel_devices_and_init_accelerator(self) -> None:
@@ -367,7 +370,16 @@ class _Connector:
                 return env_type()
         return LightningEnvironment()
 
+    def _is_dml(self):
+        return isinstance(self._accelerator_flag, (DMLAccelerator)) or (
+            isinstance(self._accelerator_flag, str) and (self._accelerator_flag == "dml")
+        )
+    
     def _choose_strategy(self) -> Union[Strategy, str]:
+        # prevent NotImplementedError: Could not run 'c10d::allgather_' with arguments from the 'AutogradPrivateUse1' backend.
+        if self.is_dml():
+            if self._parallel_devices and len(self._parallel_devices) > 1:
+                return SingleDeviceStrategy(device=self._parallel_devices[0])
         if self._accelerator_flag == "tpu" or isinstance(self._accelerator_flag, XLAAccelerator):
             if self._parallel_devices and len(self._parallel_devices) > 1:
                 return "xla"
@@ -376,8 +388,8 @@ class _Connector:
         if self._num_nodes_flag > 1:
             return "ddp"
         if len(self._parallel_devices) <= 1:
-            if isinstance(self._accelerator_flag, (CUDAAccelerator, MPSAccelerator)) or (
-                isinstance(self._accelerator_flag, str) and self._accelerator_flag in ("cuda", "gpu", "mps")
+            if isinstance(self._accelerator_flag, (CUDAAccelerator, MPSAccelerator, DMLAccelerator)) or (
+                isinstance(self._accelerator_flag, str) and self._accelerator_flag in ("cuda", "gpu", "mps", "dml")
             ):
                 device = _determine_root_gpu_device(self._parallel_devices)
             else:
@@ -405,7 +417,7 @@ class _Connector:
             )
         if (
             strategy_flag in _FSDP_ALIASES or isinstance(self._strategy_flag, FSDPStrategy)
-        ) and self._accelerator_flag not in ("cuda", "gpu"):
+        ) and self._accelerator_flag not in ("cuda", "gpu", "dml"):
             raise ValueError(
                 "You selected the FSDP strategy but FSDP is only available on GPU. Set `Fabric(accelerator='gpu', ...)`"
                 " to continue or select a different strategy."
@@ -464,7 +476,10 @@ class _Connector:
                 if self._precision_input == "16-mixed"
                 else "Using bfloat16 Automatic Mixed Precision (AMP)"
             )
-            device = "cpu" if self._accelerator_flag == "cpu" else "cuda"
+            if self._is_dml():
+                device = "dml"
+            else:
+                device = "cpu" if self._accelerator_flag == "cpu" else "cuda"
             return MixedPrecision(precision=self._precision_input, device=device)  # type: ignore[arg-type]
 
         raise RuntimeError("No precision set")
@@ -562,3 +577,5 @@ def _convert_precision_to_unified_args(precision: _PRECISION_INPUT) -> _PRECISIO
 
 def _is_using_cli() -> bool:
     return bool(int(os.environ.get("LT_CLI_USED", "0")))
+
+# DMLPatch

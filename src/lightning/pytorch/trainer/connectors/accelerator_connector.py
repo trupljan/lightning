@@ -35,6 +35,7 @@ from lightning.pytorch.accelerators.accelerator import Accelerator
 from lightning.pytorch.accelerators.cuda import CUDAAccelerator
 from lightning.pytorch.accelerators.mps import MPSAccelerator
 from lightning.pytorch.accelerators.xla import XLAAccelerator
+from lightning.pytorch.accelerators.dml import DMLAccelerator
 from lightning.pytorch.plugins import (
     CheckpointIO,
     DeepSpeedPrecisionPlugin,
@@ -359,6 +360,8 @@ class _AcceleratorConnector:
             return "mps"
         if CUDAAccelerator.is_available():
             return "cuda"
+        if DMLAccelerator.is_available():
+            return "dml"
         raise MisconfigurationException("No supported gpu backend found!")
 
     def _set_parallel_devices_and_init_accelerator(self) -> None:
@@ -408,7 +411,16 @@ class _AcceleratorConnector:
                 return BaguaEnvironment()
         return LightningEnvironment()
 
+    def _is_dml(self):
+        return isinstance(self._accelerator_flag, (DMLAccelerator)) or (
+            isinstance(self._accelerator_flag, str) and (self._accelerator_flag == "dml")
+        )
+    
     def _choose_strategy(self) -> Union[Strategy, str]:
+        # prevent NotImplementedError: Could not run 'c10d::allgather_' with arguments from the 'AutogradPrivateUse1' backend.
+        if self._is_dml():
+            if self._parallel_devices and len(self._parallel_devices) > 1:
+                return SingleDeviceStrategy(device=self._parallel_devices[0])
         if self._accelerator_flag == "ipu":
             if not _LIGHTNING_GRAPHCORE_AVAILABLE:
                 raise ImportError(
@@ -442,8 +454,8 @@ class _AcceleratorConnector:
         if self._num_nodes_flag > 1:
             return "ddp"
         if len(self._parallel_devices) <= 1:
-            if isinstance(self._accelerator_flag, (CUDAAccelerator, MPSAccelerator)) or (
-                isinstance(self._accelerator_flag, str) and self._accelerator_flag in ("cuda", "gpu", "mps")
+            if isinstance(self._accelerator_flag, (CUDAAccelerator, MPSAccelerator, DMLAccelerator)) or (
+                isinstance(self._accelerator_flag, str) and self._accelerator_flag in ("cuda", "gpu", "mps", "dml")
             ):
                 device = _determine_root_gpu_device(self._parallel_devices)
             else:
@@ -463,7 +475,7 @@ class _AcceleratorConnector:
 
         if (
             strategy_flag in FSDPStrategy.get_registered_strategies() or isinstance(self._strategy_flag, FSDPStrategy)
-        ) and self._accelerator_flag not in ("cuda", "gpu"):
+        ) and self._accelerator_flag not in ("cuda", "gpu", "dml"):
             raise MisconfigurationException(
                 f"You selected strategy to be `{FSDPStrategy.strategy_name}`, but GPU accelerator is not used."
             )
@@ -540,7 +552,10 @@ class _AcceleratorConnector:
             rank_zero_info(
                 f"Using {'16bit' if self._precision_flag == '16-mixed' else 'bfloat16'} Automatic Mixed Precision (AMP)"
             )
-            device = "cpu" if self._accelerator_flag == "cpu" else "cuda"
+            if self._is_dml():
+                device = "dml"
+            else:
+                device = "cpu" if self._accelerator_flag == "cpu" else "cuda"
 
             if isinstance(self.strategy, FSDPStrategy):
                 return FSDPMixedPrecisionPlugin(self._precision_flag, device)  # type: ignore[arg-type]
@@ -710,3 +725,5 @@ def _register_external_accelerators_and_strategies() -> None:
             IPUAccelerator.register_accelerators(AcceleratorRegistry)
         if "ipu_strategy" not in StrategyRegistry:
             IPUStrategy.register_strategies(StrategyRegistry)
+
+# DMLPatch

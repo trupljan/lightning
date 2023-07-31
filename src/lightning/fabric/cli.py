@@ -20,7 +20,7 @@ from typing import Any, List, Optional
 from lightning_utilities.core.imports import RequirementCache
 from typing_extensions import get_args
 
-from lightning.fabric.accelerators import CPUAccelerator, CUDAAccelerator, MPSAccelerator
+from lightning.fabric.accelerators import CPUAccelerator, CUDAAccelerator, MPSAccelerator, DMLAccelerator
 from lightning.fabric.plugins.precision.precision import _PRECISION_INPUT_STR, _PRECISION_INPUT_STR_ALIAS
 from lightning.fabric.strategies import STRATEGY_REGISTRY
 from lightning.fabric.utilities.device_parser import _parse_gpu_ids
@@ -29,7 +29,7 @@ _log = logging.getLogger(__name__)
 
 _CLICK_AVAILABLE = RequirementCache("click")
 
-_SUPPORTED_ACCELERATORS = ("cpu", "gpu", "cuda", "mps", "tpu")
+_SUPPORTED_ACCELERATORS = ("cpu", "gpu", "cuda", "mps", "tpu", "dml")
 
 
 def _get_supported_strategies() -> List[str]:
@@ -149,6 +149,8 @@ def _get_num_processes(accelerator: str, devices: str) -> int:
         parsed_devices = _parse_gpu_ids(devices, include_cuda=True, include_mps=True)
     elif accelerator == "cuda":
         parsed_devices = CUDAAccelerator.parse_devices(devices)
+    elif accelerator == "dml":
+        parsed_devices = DMLAccelerator.parse_devices(devices)
     elif accelerator == "mps":
         parsed_devices = MPSAccelerator.parse_devices(devices)
     elif accelerator == "tpu":
@@ -193,3 +195,5 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     _run_model()
+
+# DMLPatch
