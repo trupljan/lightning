@@ -23,6 +23,7 @@ import lightning.pytorch as pl
 from lightning.fabric.utilities.imports import _TORCH_EQUAL_2_0, _TORCH_GREATER_EQUAL_1_13
 from lightning.fabric.utilities.warnings import PossibleUserWarning
 from lightning.pytorch.accelerators.xla import XLAAccelerator
+from lightning.pytorch.accelerators.dml import DMLAccelerator
 from lightning.pytorch.callbacks.timer import Timer
 from lightning.pytorch.loops import _Loop
 from lightning.pytorch.loops.fetchers import _DataFetcher, _DataLoaderIterDataFetcher, _PrefetchDataFetcher
@@ -162,6 +163,9 @@ def _no_grad_context(loop_run: Callable) -> Callable:
             # TODO: explore why and possibly open an issue in PyTorch repository
             context_manager = torch.no_grad
         elif isinstance(self.trainer.accelerator, XLAAccelerator):  # noqa: SIM114
+            context_manager = torch.no_grad
+        elif isinstance(self.trainer.accelerator, DMLAccelerator):  # noqa: SIM114
+            # prevent "RuntimeError: Cannot set version_counter for inference tensor"
             context_manager = torch.no_grad
         elif _TORCH_GREATER_EQUAL_1_13 and isinstance(self.trainer.strategy, FSDPStrategy):  # noqa: SIM114
             # https://github.com/pytorch/pytorch/issues/95957
