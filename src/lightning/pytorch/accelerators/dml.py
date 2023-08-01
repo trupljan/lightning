@@ -25,10 +25,10 @@ except:
 
 from lightning_utilities.core.imports import RequirementCache
 
-from lightning_fabric.accelerators import _AcceleratorRegistry
-from lightning_fabric.utilities.types import _DEVICE
-from pytorch_lightning.accelerators.accelerator import Accelerator
-from pytorch_lightning.utilities.exceptions import MisconfigurationException
+from lightning.fabric.accelerators import _AcceleratorRegistry
+from lightning.fabric.utilities.types import _DEVICE
+from lightning.pytorch.accelerators.accelerator import Accelerator
+from lightning.pytorch.utilities.exceptions import MisconfigurationException
 
 class DMLAccelerator(Accelerator):
     """Accelerator for DML devices."""
@@ -54,7 +54,7 @@ class DMLAccelerator(Accelerator):
         """Accelerator device parsing logic."""
         if not _has_directml:
             return []
-        from lightning_fabric.utilities.device_parser import _parse_gpu_ids
+        from lightning.fabric.utilities.device_parser import _parse_gpu_ids
         return _parse_gpu_ids(devices, include_dml=True)
 
     @staticmethod

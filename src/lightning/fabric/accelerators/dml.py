@@ -23,8 +23,8 @@ try:
 except:
     pass
 
-from lightning_fabric.accelerators.accelerator import Accelerator
-from lightning_fabric.accelerators.registry import _AcceleratorRegistry
+from lightning.fabric.accelerators.accelerator import Accelerator
+from lightning.fabric.accelerators.registry import _AcceleratorRegistry
 
 
 class DMLAccelerator(Accelerator):
@@ -47,7 +47,7 @@ class DMLAccelerator(Accelerator):
         """Accelerator device parsing logic."""
         if not _has_directml:
             return []
-        from lightning_fabric.utilities.device_parser import _parse_gpu_ids
+        from lightning.fabric.utilities.device_parser import _parse_gpu_ids
         return _parse_gpu_ids(devices, include_dml=True)
 
     @staticmethod
